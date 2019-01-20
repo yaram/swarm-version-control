@@ -17,7 +17,8 @@
     "vcs": "./dist/cli.js"
   },
   "dependencies": {
-    "@erebos/api-bzz-node": "^0.6.2"
+    "@erebos/api-bzz-node": "^0.6.2",
+    "commander": "^2.19.0"
   },
   "devDependencies": {
     "typescript": "^3.2.4"
