@@ -16,6 +16,9 @@
   "bin": {
     "vcs": "./dist/cli.js"
   },
+  "dependencies": {
+    "@erebos/api-bzz-node": "^0.6.2"
+  },
   "devDependencies": {
     "typescript": "^3.2.4"
   }
