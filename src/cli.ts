@@ -34,7 +34,7 @@ program
         }
 
         fs.mkdirSync(dataPath);
-        fs.mkdirSync(path.join(dataPath, 'objects'));
+        fs.mkdirSync(path.join(dataPath, 'cache'));
 
         logger.info(`Initialized repository in ${repositoryPath}`);
     });
