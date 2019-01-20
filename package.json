@@ -1,0 +1,22 @@
+{
+  "name": "swarm-version-control",
+  "version": "0.1.0",
+  "description": "A decentralized version control system utilizing Swarm for storage",
+  "author": "Yaram <pootisspencerherenao@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yaram/decentralized-version-control"
+  },
+  "scripts": {
+    "prepack": "npm run-script build",
+    "build": "tsc --build tsconfig.json",
+    "start": "npm run-script build & node ./dist/cli.js"
+  },
+  "bin": {
+    "vcs": "./dist/cli.js"
+  },
+  "devDependencies": {
+    "typescript": "^3.2.4"
+  }
+}
