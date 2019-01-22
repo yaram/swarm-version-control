@@ -36,13 +36,16 @@ program
         }
 
         await fs.mkdir(dataPath);
-        await fs.mkdir(path.join(dataPath, 'cache'));
 
         logger.info(`Initialized repository in ${repositoryPath}`);
     });
 
 async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirectoryPath: string): Promise<string>{
     const hash = await bzz.upload(data);
+
+    if(!await fs.exists(cacheDirectoryPath)){
+        await fs.mkdir(cacheDirectoryPath);
+    }
 
     const cachePath = path.join(cacheDirectoryPath, hash);
 
