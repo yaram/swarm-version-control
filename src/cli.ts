@@ -120,9 +120,20 @@ program
 
         const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, bzz, [/\.swarmvc/g]);
 
-        const commitText = `${treeHash}\n\n${message}`;
+        const headPath = path.join(dataPath, 'head');
+
+        let commitText;
+        if(await fs.exists(headPath)){
+            const parentCommitHash = await fs.readFile(headPath, 'utf8');
+
+            commitText = `tree: ${treeHash}\nparents: ${parentCommitHash}\n\n${message}`;
+        }else{
+            commitText = `tree: ${treeHash}\n\n${message}`;
+        }
 
         const commitHash = await uploadAndCacheObject(commitText, bzz, cacheDirectoryPath);
+
+        await fs.writeFile(headPath, commitHash);
 
         logger.info(`Created commit ${commitHash}`);
     })
