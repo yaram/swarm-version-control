@@ -3,6 +3,13 @@ import * as winston from 'winston';
 import * as fs from 'mz/fs';
 import * as path from 'path';
 import Bzz from '@erebos/api-bzz-node';
+import * as stringify from 'json-stable-stringify';
+
+interface Commit{
+    tree: string,
+    parents: string[],
+    message: string
+}
 
 const logger = winston.createLogger({
     level: 'info',
@@ -57,42 +64,44 @@ async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirect
 }
 
 async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath: string, bzz: Bzz, ignoring?: [RegExp]): Promise<string>{
-    const children = await fs.readdir(directoryPath);
+    const childNames = await fs.readdir(directoryPath);
 
-    let text = '';
+    let children: {[key: string]: string;} = {};
 
-    for(let i = 0; i < children.length; i++){
-        const child = children[i];
+    for(let i = 0; i < childNames.length; i++){
+        const childName = childNames[i];
         let shouldIgnore = false;
 
         if(ignoring !== undefined){
             ignoring.forEach((pattern) => {
-                if(pattern.test(child)){
+                if(pattern.test(childName)){
                     shouldIgnore = true;
                 }
             });
         }
 
         if(!shouldIgnore){
-            const childPath = path.join(directoryPath, child);
+            const childPath = path.join(directoryPath, childName);
 
             const stats = await fs.stat(childPath);
 
             if(stats.isDirectory()){
                 const hash = await uploadAndCacheDirectory(childPath, cacheDirectoryPath, bzz);
 
-                text += `${child}/: ${hash}\n`;
+                children[`${childName}/`] = hash;
             }else if(stats.isFile()){
                 const data = await fs.readFile(childPath);
 
                 const hash = await uploadAndCacheObject(data, bzz, cacheDirectoryPath);
 
-                text += `${child}: ${hash}\n`;
+                children[childName] = hash;
             }
         }
     }
 
-    const hash = await uploadAndCacheObject(text, bzz, cacheDirectoryPath);
+    const childrenJson = stringify(children);
+
+    const hash = await uploadAndCacheObject(childrenJson, bzz, cacheDirectoryPath);
 
     return hash;
 }
@@ -125,16 +134,26 @@ program
 
         const headPath = path.join(dataPath, 'head');
 
-        let commitText;
+        let commit: Commit;
         if(await fs.exists(headPath)){
             const parentCommitHash = await fs.readFile(headPath, 'utf8');
 
-            commitText = `tree: ${treeHash}\nparents: ${parentCommitHash}\n\n${message}`;
+            commit = {
+                tree: treeHash,
+                parents: [parentCommitHash],
+                message: message
+            };
         }else{
-            commitText = `tree: ${treeHash}\n\n${message}`;
+            commit = {
+                tree: treeHash,
+                parents: [],
+                message: message
+            };
         }
 
-        const commitHash = await uploadAndCacheObject(commitText, bzz, cacheDirectoryPath);
+        const commitJson = stringify(commit);
+
+        const commitHash = await uploadAndCacheObject(commitJson, bzz, cacheDirectoryPath);
 
         await fs.writeFile(headPath, commitHash);
 
