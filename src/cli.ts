@@ -2,7 +2,7 @@ import * as program from 'commander';
 import * as winston from 'winston';
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import {keccak256} from 'js-sha3';
+import Bzz from '@erebos/api-bzz-node';
 
 const logger = winston.createLogger({
     level: 'info',
@@ -14,7 +14,8 @@ const logger = winston.createLogger({
 
 program
     .version('0.1.0')
-    .option('--repo [path]', 'local repository directory', '.');
+    .option('--repo [path]', 'local repository directory', '.')
+    .option('--bzz [url]', 'Swarm HTTP API endpoint', 'https://swarm-gateways.net');
 
 program
     .command('init')
@@ -40,14 +41,25 @@ program
         logger.info(`Initialized repository in ${repositoryPath}`);
     });
 
-async function cacheDirectory(directoryPath: string, cacheDirectoryPath: string, ignoring?: [RegExp]): Promise<string>{
+async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirectoryPath: string): Promise<string>{
+    const hash = await bzz.upload(data);
+
+    const cachePath = path.join(cacheDirectoryPath, hash);
+
+    if(!await fs.exists(cachePath)){
+        await fs.writeFile(cachePath, data);
+    }
+
+    return hash;
+}
+
+async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath: string, bzz: Bzz, ignoring?: [RegExp]): Promise<string>{
     const children = await fs.readdir(directoryPath);
 
     let text = '';
 
     for(let i = 0; i < children.length; i++){
         const child = children[i];
-
         let shouldIgnore = false;
 
         if(ignoring !== undefined){
@@ -64,30 +76,20 @@ async function cacheDirectory(directoryPath: string, cacheDirectoryPath: string,
             const stats = await fs.stat(childPath);
 
             if(stats.isDirectory()){
-                const hash = cacheDirectory(childPath, cacheDirectoryPath);
+                const hash = await uploadAndCacheDirectory(childPath, cacheDirectoryPath, bzz);
 
                 text += `${child}/: ${hash}\n`;
             }else if(stats.isFile()){
                 const data = await fs.readFile(childPath);
 
-                const hash = keccak256(data);
-
-                const cachePath = path.join(cacheDirectoryPath, hash);
-                if(!await fs.exists(cachePath)){
-                    await fs.writeFile(cachePath, data);
-                }
+                const hash = await uploadAndCacheObject(data, bzz, cacheDirectoryPath);
 
                 text += `${child}: ${hash}\n`;
             }
         }
     }
 
-    const hash = keccak256(text);
-
-    const cachePath = path.join(cacheDirectoryPath, hash);
-    if(!await fs.exists(cachePath)){
-        await fs.writeFile(cachePath, text);
-    }
+    const hash = await uploadAndCacheObject(text, bzz, cacheDirectoryPath);
 
     return hash;
 }
@@ -96,6 +98,10 @@ program
     .command('commit <message>')
     .description('create a new commit')
     .action(async (message: string) => {
+        const bzz = new Bzz({
+            url: program.bzz
+        });
+
         const repositoryPath = path.resolve(program.repo);
 
         if(!await fs.exists(repositoryPath)){
@@ -110,24 +116,15 @@ program
             process.exit(1);
         }
 
-        const cachePath = path.join(dataPath, 'cache');
+        const cacheDirectoryPath = path.join(dataPath, 'cache');
 
-        const treeHash = cacheDirectory(repositoryPath, cachePath, [/\.swarmvc/g]);
+        const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, bzz, [/\.swarmvc/g]);
 
-        let text = `${treeHash}\n\n${message}`;
+        const commitText = `${treeHash}\n\n${message}`;
 
-        const hash = keccak256(text);
+        const commitHash = await uploadAndCacheObject(commitText, bzz, cacheDirectoryPath);
 
-        const commitPath = path.join(cachePath, hash);
-
-        if(await fs.exists(commitPath)){
-            logger.error(`Commit ${hash} already exists`);
-            process.exit(1);
-        }
-
-        await fs.writeFile(commitPath, text);
-
-        logger.info(`Created commit ${hash}`);
+        logger.info(`Created commit ${commitHash}`);
     })
 
 program.parse(process.argv);
