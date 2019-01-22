@@ -1,6 +1,6 @@
 import * as program from 'commander';
 import * as winston from 'winston';
-import * as fs from 'fs';
+import * as fs from 'mz/fs';
 import * as path from 'path';
 import {keccak256} from 'js-sha3';
 
@@ -19,33 +19,35 @@ program
 program
     .command('init')
     .description('initialize a new repository')
-    .action(() => {
+    .action(async () => {
         const repositoryPath = path.resolve(program.repo);
 
-        if(!fs.existsSync(repositoryPath)){
+        if(!await fs.exists(repositoryPath)){
             logger.error(`Repository directory at ${repositoryPath} does not exist`);
             process.exit(1);
         }
 
         const dataPath = path.join(repositoryPath, '.swarmvc');
 
-        if(fs.existsSync(dataPath)){
+        if(await fs.exists(dataPath)){
             logger.error('A repository already exists in this directory');
             process.exit(1);
         }
 
-        fs.mkdirSync(dataPath);
-        fs.mkdirSync(path.join(dataPath, 'cache'));
+        await fs.mkdir(dataPath);
+        await fs.mkdir(path.join(dataPath, 'cache'));
 
         logger.info(`Initialized repository in ${repositoryPath}`);
     });
 
-function cacheDirectory(directoryPath: string, cacheDirectoryPath: string, ignoring?: [RegExp]): string{
-    const children = fs.readdirSync(directoryPath);
+async function cacheDirectory(directoryPath: string, cacheDirectoryPath: string, ignoring?: [RegExp]): Promise<string>{
+    const children = await fs.readdir(directoryPath);
 
     let text = '';
 
-    children.forEach((child) => {
+    for(let i = 0; i < children.length; i++){
+        const child = children[i];
+
         let shouldIgnore = false;
 
         if(ignoring !== undefined){
@@ -59,32 +61,32 @@ function cacheDirectory(directoryPath: string, cacheDirectoryPath: string, ignor
         if(!shouldIgnore){
             const childPath = path.join(directoryPath, child);
 
-            const stats = fs.statSync(childPath);
+            const stats = await fs.stat(childPath);
 
             if(stats.isDirectory()){
                 const hash = cacheDirectory(childPath, cacheDirectoryPath);
 
                 text += `${child}/: ${hash}\n`;
             }else if(stats.isFile()){
-                const data = fs.readFileSync(childPath);
+                const data = await fs.readFile(childPath);
 
                 const hash = keccak256(data);
 
                 const cachePath = path.join(cacheDirectoryPath, hash);
-                if(!fs.existsSync(cachePath)){
-                    fs.writeFileSync(cachePath, data);
+                if(!await fs.exists(cachePath)){
+                    await fs.writeFile(cachePath, data);
                 }
 
                 text += `${child}: ${hash}\n`;
             }
         }
-    });
+    }
 
     const hash = keccak256(text);
 
     const cachePath = path.join(cacheDirectoryPath, hash);
-    if(!fs.existsSync(cachePath)){
-        fs.writeFileSync(cachePath, text);
+    if(!await fs.exists(cachePath)){
+        await fs.writeFile(cachePath, text);
     }
 
     return hash;
@@ -93,17 +95,17 @@ function cacheDirectory(directoryPath: string, cacheDirectoryPath: string, ignor
 program
     .command('commit <message>')
     .description('create a new commit')
-    .action((message: string) => {
+    .action(async (message: string) => {
         const repositoryPath = path.resolve(program.repo);
 
-        if(!fs.existsSync(repositoryPath)){
+        if(!await fs.exists(repositoryPath)){
             logger.error(`Repository directory at ${repositoryPath} does not exist`);
             process.exit(1);
         }
 
         const dataPath = path.join(repositoryPath, '.swarmvc');
 
-        if(!fs.existsSync(dataPath)){
+        if(!await fs.exists(dataPath)){
             logger.error('No repository exists in this directory');
             process.exit(1);
         }
@@ -118,12 +120,12 @@ program
 
         const commitPath = path.join(cachePath, hash);
 
-        if(fs.existsSync(commitPath)){
+        if(await fs.exists(commitPath)){
             logger.error(`Commit ${hash} already exists`);
             process.exit(1);
         }
 
-        fs.writeFileSync(commitPath, text);
+        await fs.writeFile(commitPath, text);
 
         logger.info(`Created commit ${hash}`);
     })
