@@ -140,8 +140,6 @@ program
             info = {};
         }
 
-        const isHeadDetached = info.branches !== undefined && info.branches[info.head] == undefined;
-
         let commit: {
             tree: string,
             parents: string[],
@@ -192,5 +190,47 @@ program
 
         logger.info(`Created commit ${commitHash}`);
     })
+
+program
+    .command('checkout <commit or branch>')
+    .description('move the head to a different branch or commit')
+    .action(async (commitLike: string) => { 
+        const repositoryPath = path.resolve(program.repo);
+
+        if(!await fs.exists(repositoryPath)){
+            logger.error(`Repository directory at ${repositoryPath} does not exist`);
+            process.exit(1);
+        }
+
+        const dataPath = path.join(repositoryPath, '.swarmvc');
+
+        if(!await fs.exists(dataPath)){
+            logger.error('No repository exists in this directory');
+            process.exit(1);
+        }
+
+        const infoPath = path.join(dataPath, 'info.json');
+
+        let info: {
+            head?: string,
+            branches?: {[key: string]: string;}
+        };
+
+        if(await fs.exists(infoPath)){
+            const infoJson = await fs.readFile(infoPath, 'utf8');
+
+            info = JSON.parse(infoJson);
+        }else{
+            info = {};
+        }
+
+        info.head = commitLike;
+
+        const infoJson = JSON.stringify(info, null, 2);
+
+        await fs.writeFile(infoPath, infoJson);
+
+        logger.info(`Moved the head to ${commitLike}`);
+    });
 
 program.parse(process.argv);
