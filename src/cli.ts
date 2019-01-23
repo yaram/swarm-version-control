@@ -99,6 +99,27 @@ async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath
     return hash;
 }
 
+async function resolveRepoPathsAndCheck(repo: string): Promise<{repositoryPath: string, dataPath: string}>{
+    const repositoryPath = repo;
+
+    if(!await fs.exists(repositoryPath)){
+        logger.error(`Repository directory at ${repositoryPath} does not exist`);
+        process.exit(1);
+    }
+
+    const dataPath = path.join(repositoryPath, '.swarmvc');
+
+    if(!await fs.exists(dataPath)){
+        logger.error('No repository exists in this directory');
+        process.exit(1);
+    }
+
+    return {
+        repositoryPath,
+        dataPath
+    };
+}
+
 program
     .command('commit <message>')
     .description('create a new commit')
@@ -107,19 +128,7 @@ program
             url: program.bzz
         });
 
-        const repositoryPath = path.resolve(program.repo);
-
-        if(!await fs.exists(repositoryPath)){
-            logger.error(`Repository directory at ${repositoryPath} does not exist`);
-            process.exit(1);
-        }
-
-        const dataPath = path.join(repositoryPath, '.swarmvc');
-
-        if(!await fs.exists(dataPath)){
-            logger.error('No repository exists in this directory');
-            process.exit(1);
-        }
+        const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
 
         const cacheDirectoryPath = path.join(dataPath, 'cache');
 
@@ -195,19 +204,7 @@ program
     .command('checkout <commit or branch>')
     .description('move the head to a different branch or commit')
     .action(async (commitLike: string) => { 
-        const repositoryPath = path.resolve(program.repo);
-
-        if(!await fs.exists(repositoryPath)){
-            logger.error(`Repository directory at ${repositoryPath} does not exist`);
-            process.exit(1);
-        }
-
-        const dataPath = path.join(repositoryPath, '.swarmvc');
-
-        if(!await fs.exists(dataPath)){
-            logger.error('No repository exists in this directory');
-            process.exit(1);
-        }
+        const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
 
         const infoPath = path.join(dataPath, 'info.json');
 
