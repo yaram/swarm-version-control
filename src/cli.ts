@@ -68,8 +68,7 @@ async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath
 
     let children: {[key: string]: string;} = {};
 
-    for(let i = 0; i < childNames.length; i++){
-        const childName = childNames[i];
+    for(const childName of childNames){
         let shouldIgnore = false;
 
         if(ignoring !== undefined){
