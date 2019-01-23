@@ -128,7 +128,8 @@ program
         const infoPath = path.join(dataPath, 'info.json');
 
         let info: {
-            head?: string
+            head?: string,
+            branches?: {[key: string]: string;}
         };
 
         if(await fs.exists(infoPath)){
@@ -139,6 +140,8 @@ program
             info = {};
         }
 
+        const isHeadDetached = info.branches !== undefined && info.branches[info.head] == undefined;
+
         let commit: {
             tree: string,
             parents: string[],
@@ -146,6 +149,14 @@ program
         };
 
         if(info.head !== undefined){
+            let headCommit;
+
+            if(isHeadDetached){
+                headCommit = info.head;
+            }else{
+                headCommit = info.branches[info.head];
+            }
+
             commit = {
                 tree: treeHash,
                 parents: [info.head],
@@ -163,7 +174,17 @@ program
 
         const commitHash = await uploadAndCacheObject(commitJson, bzz, cacheDirectoryPath);
 
-        info.head = commitHash;
+        if(info.branches === undefined){
+            info.branches = {
+                master: commitHash
+            };
+
+            info.head = 'master';
+        }else if(isHeadDetached){
+            info.head = commitHash;
+        }else{
+            info.branches[info.head] = commitHash;
+        }
 
         const infoJson = JSON.stringify(info, null, 2);
 
