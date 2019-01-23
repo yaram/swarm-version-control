@@ -145,7 +145,7 @@ program
             message: string
         };
 
-        if(info.head !== null){
+        if(info.head !== undefined){
             commit = {
                 tree: treeHash,
                 parents: [info.head],
