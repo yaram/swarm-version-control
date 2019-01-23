@@ -151,7 +151,7 @@ program
         if(info.head !== undefined){
             let headCommit;
 
-            if(isHeadDetached){
+            if(info.branches !== undefined && info.branches[info.head] == undefined){
                 headCommit = info.head;
             }else{
                 headCommit = info.branches[info.head];
@@ -180,7 +180,7 @@ program
             };
 
             info.head = 'master';
-        }else if(isHeadDetached){
+        }else if(info.branches[info.head] == undefined){
             info.head = commitHash;
         }else{
             info.branches[info.head] = commitHash;
