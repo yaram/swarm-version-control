@@ -230,4 +230,53 @@ program
         logger.info(`Moved the head to ${commitLike}`);
     });
 
+program
+    .command('create-branch <name>')
+    .description('create a branch on the current head commit')
+    .action(async (name: string) => {
+        const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
+
+        const infoPath = path.join(dataPath, 'info.json');
+
+        let info: {
+            head?: string,
+            branches?: {[key: string]: string;}
+        };
+
+        if(await fs.exists(infoPath)){
+            const infoJson = await fs.readFile(infoPath, 'utf8');
+
+            info = JSON.parse(infoJson);
+        }else{
+            info = {};
+        }
+
+        if(info.head === undefined){
+            logger.error('No commits have been made yet');
+            process.exit(1);
+        }
+
+        let commitHash;
+
+        if(info.branches !== undefined && info.branches[info.head] !== undefined){
+            commitHash = info.branches[info.head];
+        }else{
+            commitHash = info.head;
+        }
+
+        if(info.branches === undefined){
+            info.branches = {};
+        }
+
+        info.branches[name] = commitHash;
+
+        info.head = name;
+
+        const infoJson = JSON.stringify(info, null, 2);
+
+        await fs.writeFile(infoPath, infoJson);
+
+        logger.info(`Created branch ${name} at ${commitHash}`);
+    });
+
 program.parse(process.argv);
