@@ -5,12 +5,6 @@ import * as path from 'path';
 import Bzz from '@erebos/api-bzz-node';
 import * as stringify from 'json-stable-stringify';
 
-interface Commit{
-    tree: string,
-    parents: string[],
-    message: string
-}
-
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.cli(),
@@ -133,7 +127,11 @@ program
 
         const headPath = path.join(dataPath, 'head');
 
-        let commit: Commit;
+        let commit: {
+            tree: string,
+            parents: string[],
+            message: string
+        };
         if(await fs.exists(headPath)){
             const parentCommitHash = await fs.readFile(headPath, 'utf8');
 
