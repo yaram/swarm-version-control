@@ -125,19 +125,30 @@ program
 
         const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, bzz, [/\.swarmvc/g]);
 
-        const headPath = path.join(dataPath, 'head');
+        const infoPath = path.join(dataPath, 'info.json');
+
+        let info: {
+            head?: string
+        };
+
+        if(await fs.exists(infoPath)){
+            const infoJson = await fs.readFile(infoPath, 'utf8');
+
+            info = JSON.parse(infoJson);
+        }else{
+            info = {};
+        }
 
         let commit: {
             tree: string,
             parents: string[],
             message: string
         };
-        if(await fs.exists(headPath)){
-            const parentCommitHash = await fs.readFile(headPath, 'utf8');
 
+        if(info.head !== null){
             commit = {
                 tree: treeHash,
-                parents: [parentCommitHash],
+                parents: [info.head],
                 message: message
             };
         }else{
@@ -152,7 +163,11 @@ program
 
         const commitHash = await uploadAndCacheObject(commitJson, bzz, cacheDirectoryPath);
 
-        await fs.writeFile(headPath, commitHash);
+        info.head = commitHash;
+
+        const infoJson = JSON.stringify(info, null, 2);
+
+        await fs.writeFile(infoPath, infoJson);
 
         logger.info(`Created commit ${commitHash}`);
     })
