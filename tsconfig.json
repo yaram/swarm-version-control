@@ -4,7 +4,8 @@
     "target": "es2016",
     "moduleResolution": "node",
     "sourceMap": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "noImplicitAny": true
   },
   "include": [
     "src/**/*"
