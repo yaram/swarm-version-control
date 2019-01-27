@@ -4,6 +4,7 @@ import * as fs from 'mz/fs';
 import * as path from 'path';
 import Bzz from '@erebos/api-bzz-node';
 import * as stringify from 'json-stable-stringify';
+import swarmHash from 'swarmhash3';
 
 const logger = winston.createLogger({
     level: 'info',
@@ -42,7 +43,7 @@ program
     });
 
 async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirectoryPath: string): Promise<string>{
-    const hash = await bzz.upload(data);
+    const hash = swarmHash(data);
 
     if(!await fs.exists(cacheDirectoryPath)){
         await fs.mkdir(cacheDirectoryPath);
@@ -51,6 +52,13 @@ async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirect
     const cachePath = path.join(cacheDirectoryPath, hash);
 
     if(!await fs.exists(cachePath)){
+        const uploadedHash = await bzz.upload(data);
+
+        if(uploadedHash !== hash){
+            logger.error(`Uploaded hash ${uploadedHash} does not match expected hash ${hash}`);
+            process.exit(1);
+        }
+
         await fs.writeFile(cachePath, data);
     }
 
