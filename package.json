@@ -13,7 +13,7 @@
   },
   "homepage": "https://github.com/yaram/swarm-version-control#readme",
   "scripts": {
-    "prepack": "npm run-script build",
+    "prepare": "npm run-script build",
     "build": "tsc --build tsconfig.json",
     "start": "node ./dist/cli.js"
   },
