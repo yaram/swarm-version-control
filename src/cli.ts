@@ -24,23 +24,25 @@ program
     .command('init')
     .description('initialize a new repository')
     .action(async () => {
-        const repositoryPath = path.resolve(program.repo);
+        try{
+            const repositoryPath = path.resolve(program.repo);
 
-        if(!await fs.exists(repositoryPath)){
-            logger.error(`Repository directory at ${repositoryPath} does not exist`);
-            process.exit(1);
+            if(!await fs.exists(repositoryPath)){
+                throw new Error(`Repository directory at ${repositoryPath} does not exist`);
+            }
+
+            const dataPath = path.join(repositoryPath, '.swarmvc');
+
+            if(await fs.exists(dataPath)){
+                throw new Error('A repository already exists in this directory');
+            }
+
+            await fs.mkdir(dataPath);
+
+            logger.info(`Initialized repository in ${repositoryPath}`);
+        }catch(error){
+            logger.error(error);
         }
-
-        const dataPath = path.join(repositoryPath, '.swarmvc');
-
-        if(await fs.exists(dataPath)){
-            logger.error('A repository already exists in this directory');
-            process.exit(1);
-        }
-
-        await fs.mkdir(dataPath);
-
-        logger.info(`Initialized repository in ${repositoryPath}`);
     });
 
 async function uploadAndCacheObject(data: string | Buffer, bzzUrl: string, cacheDirectoryPath: string): Promise<string>{
@@ -64,8 +66,7 @@ async function uploadAndCacheObject(data: string | Buffer, bzzUrl: string, cache
         const uploadedHash: string = await request(requestOptions);
 
         if(uploadedHash !== hash){
-            logger.error(`Uploaded hash ${uploadedHash} does not match expected hash ${hash}`);
-            process.exit(1);
+            throw new Error(`Uploaded hash ${uploadedHash} does not match expected hash ${hash}`);
         }
 
         await fs.writeFile(cachePath, data);
@@ -120,15 +121,13 @@ async function resolveRepoPathsAndCheck(repo: string): Promise<{repositoryPath: 
     const repositoryPath = repo;
 
     if(!await fs.exists(repositoryPath)){
-        logger.error(`Repository directory at ${repositoryPath} does not exist`);
-        process.exit(1);
+        throw new Error(`Repository directory at ${repositoryPath} does not exist`);
     }
 
     const dataPath = path.join(repositoryPath, '.swarmvc');
 
     if(!await fs.exists(dataPath)){
-        logger.error('No repository exists in this directory');
-        process.exit(1);
+        throw new Error('No repository exists in this directory');
     }
 
     return {
@@ -141,155 +140,166 @@ program
     .command('commit <message>')
     .description('create a new commit')
     .action(async (message: string) => {
-        const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
+        try{
+            const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
 
-        const cacheDirectoryPath = path.join(dataPath, 'cache');
+            const cacheDirectoryPath = path.join(dataPath, 'cache');
 
-        const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, program.bzz, [/\.swarmvc/g]);
+            const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, program.bzz, [/\.swarmvc/g]);
 
-        const infoPath = path.join(dataPath, 'info.json');
+            const infoPath = path.join(dataPath, 'info.json');
 
-        let info: {
-            head?: string,
-            branches?: {[key: string]: string;}
-        };
+            let info: {
+                head?: string,
+                branches?: {[key: string]: string;}
+            };
 
-        if(await fs.exists(infoPath)){
-            const infoJson = await fs.readFile(infoPath, 'utf8');
+            if(await fs.exists(infoPath)){
+                const infoJson = await fs.readFile(infoPath, 'utf8');
 
-            info = JSON.parse(infoJson);
-        }else{
-            info = {};
-        }
-
-        let commit: {
-            tree: string,
-            parents: string[],
-            message: string
-        };
-
-        if(info.head !== undefined){
-            let headCommit;
-
-            if(info.branches !== undefined && info.branches[info.head] == undefined){
-                headCommit = info.head;
+                info = JSON.parse(infoJson);
             }else{
-                headCommit = info.branches[info.head];
+                info = {};
             }
 
-            commit = {
-                tree: treeHash,
-                parents: [headCommit],
-                message: message
+            let commit: {
+                tree: string,
+                parents: string[],
+                message: string
             };
-        }else{
-            commit = {
-                tree: treeHash,
-                parents: [],
-                message: message
-            };
+
+            if(info.head !== undefined){
+                let headCommit;
+
+                if(info.branches !== undefined && info.branches[info.head] == undefined){
+                    headCommit = info.head;
+                }else{
+                    headCommit = info.branches[info.head];
+                }
+
+                commit = {
+                    tree: treeHash,
+                    parents: [headCommit],
+                    message: message
+                };
+            }else{
+                commit = {
+                    tree: treeHash,
+                    parents: [],
+                    message: message
+                };
+            }
+
+            const commitJson = stringify(commit);
+
+            const commitHash = await uploadAndCacheObject(commitJson, program.bzz, cacheDirectoryPath);
+
+            if(info.branches === undefined){
+                info.branches = {
+                    master: commitHash
+                };
+
+                info.head = 'master';
+            }else if(info.branches[info.head] == undefined){
+                info.head = commitHash;
+            }else{
+                info.branches[info.head] = commitHash;
+            }
+
+            const infoJson = JSON.stringify(info, null, 2);
+
+            await fs.writeFile(infoPath, infoJson);
+
+            logger.info(`Created commit ${commitHash}`);
+        }catch(error){
+            logger.error(error);
         }
-
-        const commitJson = stringify(commit);
-
-        const commitHash = await uploadAndCacheObject(commitJson, program.bzz, cacheDirectoryPath);
-
-        if(info.branches === undefined){
-            info.branches = {
-                master: commitHash
-            };
-
-            info.head = 'master';
-        }else if(info.branches[info.head] == undefined){
-            info.head = commitHash;
-        }else{
-            info.branches[info.head] = commitHash;
-        }
-
-        const infoJson = JSON.stringify(info, null, 2);
-
-        await fs.writeFile(infoPath, infoJson);
-
-        logger.info(`Created commit ${commitHash}`);
     })
 
 program
     .command('checkout <commit or branch>')
     .description('move the head to a different branch or commit')
-    .action(async (commitLike: string) => { 
-        const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
+    .action(async (commitLike: string) => {
+        try{
+            const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
 
-        const infoPath = path.join(dataPath, 'info.json');
+            const infoPath = path.join(dataPath, 'info.json');
 
-        let info: {
-            head?: string,
-            branches?: {[key: string]: string;}
-        };
+            let info: {
+                head?: string,
+                branches?: {[key: string]: string;}
+            };
 
-        if(await fs.exists(infoPath)){
-            const infoJson = await fs.readFile(infoPath, 'utf8');
+            if(await fs.exists(infoPath)){
+                const infoJson = await fs.readFile(infoPath, 'utf8');
 
-            info = JSON.parse(infoJson);
-        }else{
-            info = {};
+                info = JSON.parse(infoJson);
+            }else{
+                info = {};
+            }
+
+            info.head = commitLike;
+
+            const infoJson = JSON.stringify(info, null, 2);
+
+            await fs.writeFile(infoPath, infoJson);
+
+            logger.info(`Moved the head to ${commitLike}`);
+        }catch(error){
+            logger.error(error);
         }
-
-        info.head = commitLike;
-
-        const infoJson = JSON.stringify(info, null, 2);
-
-        await fs.writeFile(infoPath, infoJson);
-
-        logger.info(`Moved the head to ${commitLike}`);
     });
 
 program
     .command('create-branch <name>')
     .description('create a branch on the current head commit')
     .action(async (name: string) => {
-        const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
+        try{
+            const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
 
-        const infoPath = path.join(dataPath, 'info.json');
+            const infoPath = path.join(dataPath, 'info.json');
 
-        let info: {
-            head?: string,
-            branches?: {[key: string]: string;}
-        };
+            let info: {
+                head?: string,
+                branches?: {[key: string]: string;}
+            };
 
-        if(await fs.exists(infoPath)){
-            const infoJson = await fs.readFile(infoPath, 'utf8');
+            if(await fs.exists(infoPath)){
+                const infoJson = await fs.readFile(infoPath, 'utf8');
 
-            info = JSON.parse(infoJson);
-        }else{
-            info = {};
+                info = JSON.parse(infoJson);
+            }else{
+                info = {};
+            }
+
+            if(info.head === undefined){
+                throw new Error('No commits have been made yet');
+            }
+
+            let commitHash;
+
+            if(info.branches !== undefined && info.branches[info.head] !== undefined){
+                commitHash = info.branches[info.head];
+            }else{
+                commitHash = info.head;
+            }
+
+            if(info.branches === undefined){
+                info.branches = {};
+            }
+
+            info.branches[name] = commitHash;
+
+            info.head = name;
+
+            const infoJson = JSON.stringify(info, null, 2);
+
+            await fs.writeFile(infoPath, infoJson);
+
+            logger.info(`Created branch ${name} at ${commitHash}`);
+        }catch(error){
+            logger.error(error);
         }
-
-        if(info.head === undefined){
-            logger.error('No commits have been made yet');
-            process.exit(1);
-        }
-
-        let commitHash;
-
-        if(info.branches !== undefined && info.branches[info.head] !== undefined){
-            commitHash = info.branches[info.head];
-        }else{
-            commitHash = info.head;
-        }
-
-        if(info.branches === undefined){
-            info.branches = {};
-        }
-
-        info.branches[name] = commitHash;
-
-        info.head = name;
-
-        const infoJson = JSON.stringify(info, null, 2);
-
-        await fs.writeFile(infoPath, infoJson);
-
-        logger.info(`Created branch ${name} at ${commitHash}`);
     });
 
 program.parse(process.argv);
