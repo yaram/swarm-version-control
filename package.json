@@ -1,6 +1,6 @@
 {
   "name": "swarm-version-control",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A decentralized version control system utilizing Swarm for storage",
   "author": "Yaram <pootisspencerherenao@gmail.com>",
   "license": "MIT",
