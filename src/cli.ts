@@ -4,7 +4,7 @@ import * as fs from 'mz/fs';
 import * as path from 'path';
 import Bzz from '@erebos/api-bzz-node';
 import * as stringify from 'json-stable-stringify';
-import swarmHash from 'swarmhash3';
+import * as swarmHash from 'swarmhash3';
 
 const logger = winston.createLogger({
     level: 'info',
