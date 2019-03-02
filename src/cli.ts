@@ -2,9 +2,10 @@ import * as program from 'commander';
 import * as winston from 'winston';
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import Bzz from '@erebos/api-bzz-node';
 import * as stringify from 'json-stable-stringify';
 import * as swarmHash from 'swarmhash3';
+import * as request from 'request-promise';
+import * as url from 'url';
 
 const logger = winston.createLogger({
     level: 'info',
@@ -42,7 +43,7 @@ program
         logger.info(`Initialized repository in ${repositoryPath}`);
     });
 
-async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirectoryPath: string): Promise<string>{
+async function uploadAndCacheObject(data: string | Buffer, bzzUrl: string, cacheDirectoryPath: string): Promise<string>{
     const hash = swarmHash(data);
 
     if(!await fs.exists(cacheDirectoryPath)){
@@ -52,7 +53,15 @@ async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirect
     const cachePath = path.join(cacheDirectoryPath, hash);
 
     if(!await fs.exists(cachePath)){
-        const uploadedHash = await bzz.upload(data);
+        const uploadUrl = url.resolve(bzzUrl, '/bzz-raw:/');
+
+        const requestOptions = {
+            url: uploadUrl,
+            method: 'POST',
+            body: data
+        };
+    
+        const uploadedHash: string = await request(requestOptions);
 
         if(uploadedHash !== hash){
             logger.error(`Uploaded hash ${uploadedHash} does not match expected hash ${hash}`);
@@ -65,7 +74,7 @@ async function uploadAndCacheObject(data: string | Buffer, bzz: Bzz, cacheDirect
     return hash;
 }
 
-async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath: string, bzz: Bzz, ignoring?: [RegExp]): Promise<string>{
+async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath: string, bzzUrl: string, ignoring?: [RegExp]): Promise<string>{
     const childNames = await fs.readdir(directoryPath);
 
     let children: {[key: string]: string;} = {};
@@ -87,13 +96,13 @@ async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath
             const stats = await fs.stat(childPath);
 
             if(stats.isDirectory()){
-                const hash = await uploadAndCacheDirectory(childPath, cacheDirectoryPath, bzz);
+                const hash = await uploadAndCacheDirectory(childPath, cacheDirectoryPath, bzzUrl);
 
                 children[`${childName}/`] = hash;
             }else if(stats.isFile()){
                 const data = await fs.readFile(childPath);
 
-                const hash = await uploadAndCacheObject(data, bzz, cacheDirectoryPath);
+                const hash = await uploadAndCacheObject(data, bzzUrl, cacheDirectoryPath);
 
                 children[childName] = hash;
             }
@@ -102,7 +111,7 @@ async function uploadAndCacheDirectory(directoryPath: string, cacheDirectoryPath
 
     const childrenJson = stringify(children);
 
-    const hash = await uploadAndCacheObject(childrenJson, bzz, cacheDirectoryPath);
+    const hash = await uploadAndCacheObject(childrenJson, bzzUrl, cacheDirectoryPath);
 
     return hash;
 }
@@ -132,15 +141,11 @@ program
     .command('commit <message>')
     .description('create a new commit')
     .action(async (message: string) => {
-        const bzz = new Bzz({
-            url: program.bzz
-        });
-
         const {repositoryPath, dataPath} = await resolveRepoPathsAndCheck(program.repo);
 
         const cacheDirectoryPath = path.join(dataPath, 'cache');
 
-        const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, bzz, [/\.swarmvc/g]);
+        const treeHash = await uploadAndCacheDirectory(repositoryPath, cacheDirectoryPath, program.bzz, [/\.swarmvc/g]);
 
         const infoPath = path.join(dataPath, 'info.json');
 
@@ -187,7 +192,7 @@ program
 
         const commitJson = stringify(commit);
 
-        const commitHash = await uploadAndCacheObject(commitJson, bzz, cacheDirectoryPath);
+        const commitHash = await uploadAndCacheObject(commitJson, program.bzz, cacheDirectoryPath);
 
         if(info.branches === undefined){
             info.branches = {
