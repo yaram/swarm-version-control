@@ -179,7 +179,7 @@ program
 
             commit = {
                 tree: treeHash,
-                parents: [info.head],
+                parents: [headCommit],
                 message: message
             };
         }else{
