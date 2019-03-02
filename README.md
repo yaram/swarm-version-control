@@ -1,4 +1,4 @@
-# Swarm Version Control
+# Swarm Version Control [![NPM Version](https://img.shields.io/npm/v/swarm-version-control/latest.svg?style=flat-square)](https://npmjs.com/package/swarm-version-control)
 A decentralized version control system utilizing Swarm for storage
 
 ## Installing
