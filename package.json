@@ -17,6 +17,7 @@
     "build": "tsc --build tsconfig.json",
     "start": "node ./dist/cli.js"
   },
+  "preferGlobal": true,
   "bin": {
     "swarmvc": "./dist/cli.js"
   },
