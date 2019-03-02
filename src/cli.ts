@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import * as program from 'commander';
 import * as winston from 'winston';
 import * as fs from 'mz/fs';
